@@ -8,8 +8,8 @@ class URL:
     """URL class"""
 
     def __init__(self, url: str, parent_url = None) -> None:
-        self.protocol = "https://"
-        self.domain = ''
+        self.protocol = "https:"
+        self.domain = '//'
         self.section = '/'
     
         if parent_url is not None:
@@ -22,10 +22,10 @@ class URL:
             self.section = splited_url[0]
         elif len(splited_url) == 2:
             if splited_url[0] != '':
-                self.protocol = splited_url[0] + "//"
+                self.protocol = splited_url[0]
             splited_url = splited_url[1].split("/", maxsplit=2)
             if (len(splited_url) == 2):
-                self.domain = splited_url[0]
+                self.domain = "//" + splited_url[0]
                 self.section = splited_url[1]
         
         if self.section == '' or self.section[0] != '/':
@@ -37,8 +37,9 @@ class URL:
 class WebCrawler:
     """Web crawler class"""
 
-    def __init__(self, domain: str) -> None:
+    def __init__(self, domain: str, re_domain: str) -> None:
         self.base_domain = domain
+        self.re_domain = re_domain
         self.visited_url = set()
         self.processed_url_counter = 0
         self.processed_url = set()
@@ -65,7 +66,7 @@ class WebCrawler:
 
             if re.search(r"([.](pdf|doc|docx))$", url.section, re.I):
                 self.files.add(url.domain + url.section)
-            elif re.search(r"[.]" + self.base_domain, url.domain):
+            elif re.search(self.re_domain, url.domain):
                 self.url_queue.put(url)
                 self.subdomains.add(url.domain)
                 self.inner_url.setdefault(url.domain, set()).add(url.section)
@@ -147,7 +148,7 @@ class WebCrawler:
     def start_crawling(self, start_url: str, page_amount_to_visit: int) -> None:
         self.process_url(URL(start_url))
 
-        while not self.url_queue.empty() and len(self.visited_url) < page_amount_to_visit:
+        while not self.url_queue.empty():# and len(self.visited_url) < page_amount_to_visit:
             url = self.url_queue.get()
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36 Edg/112.0.1722.34'}
             
@@ -166,7 +167,7 @@ class WebCrawler:
                     self.unparsed_url.add(url.get_full_address())
                     continue
 
-                self.save_html(str(hash(url.domain + url.section)), str(root))
+                #self.save_html(str(hash(url.domain + url.section)), str(root))
 
                 for link in root.find_all('a'):
                     href = link.get("href")
@@ -183,5 +184,8 @@ class WebCrawler:
             else:
                 self.bad_url.add(url.get_full_address())
             
-            # if len(self.visited_url) % 100 == 0:
-            #     self.save_stats()
+            if len(self.visited_url) % 1000 == 0:
+                self.save_stats()
+            
+            if len(self.visited_url) % 100 == 0:
+                print(len(self.visited_url))
