@@ -7,27 +7,29 @@ from bs4 import BeautifulSoup
 class URL:
     """URL class"""
 
-    def __init__(self, url: str = None, domain: str = None, section: str = "/", protocol: str = "https://") -> None:
-        if url is not None:
-            self.protocol = protocol
-            self.domain = ""
-            self.section = section
+    def __init__(self, url: str, parent_url = None) -> None:
+        self.protocol = "https://"
+        self.domain = ''
+        self.section = '/'
+    
+        if parent_url is not None:
+            self.protocol = parent_url.protocol
+            self.domain = parent_url.domain
 
-            protocol = re.search(r"https?://", url)
-            if protocol:
-                self.protocol = protocol.group()
+        splited_url = url.split("//", maxsplit=2)
 
-            domain = re.search(r"[\w.-]*", url.removeprefix(self.protocol))
-            if domain:
-                self.domain = domain.group()
+        if len(splited_url) == 1:
+            self.section = splited_url[0]
+        elif len(splited_url) == 2:
+            if splited_url[0] != '':
+                self.protocol = splited_url[0] + "//"
+            splited_url = splited_url[1].split("/", maxsplit=2)
+            if (len(splited_url) == 2):
+                self.domain = splited_url[0]
+                self.section = splited_url[1]
         
-            section = url.removeprefix(self.protocol).removeprefix(self.domain)
-            if re.search(r"[\w-]", section):
-                self.section = section
-        else:
-            self.protocol = protocol
-            self.domain = domain
-            self.section = section
+        if self.section == '' or self.section[0] != '/':
+                self.section = '/' + self.section
     
     def get_full_address(self) -> str:
         return self.protocol + self.domain + self.section
@@ -47,6 +49,9 @@ class WebCrawler:
         self.take_away_url = set()
         self.files = set()
 
+        self.mails = set()
+        self.telephones = set()
+
         self.unanswered_url = set()
         self.unparsed_url = set()
 
@@ -60,7 +65,7 @@ class WebCrawler:
 
             if re.search(r"([.](pdf|doc|docx))$", url.section, re.I):
                 self.files.add(url.domain + url.section)
-            elif re.search(self.base_domain, url.domain):
+            elif re.search(r"[.]" + self.base_domain, url.domain):
                 self.url_queue.put(url)
                 self.subdomains.add(url.domain)
                 self.inner_url.setdefault(url.domain, set()).add(url.section)
@@ -76,51 +81,68 @@ class WebCrawler:
             fp.write(html)
     
     def save_stats(self) -> None:
-        with open("./stats/" + self.base_domain + ".txt", 'w', encoding="utf-8") as fp:
+        with open("./stats/" + self.base_domain + "_stats.txt", 'w', encoding="utf-8") as fp:
             fp.write("Основной домен: " + self.base_domain + '\n')
             fp.write("Встречено ссылок: " + str(self.processed_url_counter) + "\n")
-            # fp.write("Уникальные ссылки:\n")  
-            # for ref in self.processed_url:
-            #     fp.write('\t' + ref + '\n')
-
             fp.write("Посещено уникальных страниц: " + str(len(self.visited_url)) + "\n")
-            # fp.write("Посещенные уникальные страницы:\n")  
-            # for ref in self.visited_url:
-            #     fp.write('\t' + ref + '\n')
-
             fp.write("Встречено поддоменов: " + str(len(self.subdomains)) + "\n")
-            # fp.write("Встреченные поддомены:\n")  
-            # for ref in self.subdomains:
-            #     fp.write('\t' + ref + '\n')
-
             fp.write("Количество неработающих ссылок: " + str(len(self.bad_url)) + "\n")
-            # fp.write("Неработающие ссылки:\n")  
-            # for ref in self.bad_url:
-            #     fp.write('\t' + ref + '\n')
-            
+
             num = 0
             for s in self.inner_url.values():
                 num += len(s)
             fp.write("Количество внутренних страниц: " + str(num) + "\n")
 
-            # for key, value in self.inner_url.items():
-            #     fp.write("Домен: " + key + "\n")
-            #     for ref in value:
-            #         fp.write("\t" + ref + "\n")
-
             fp.write("Общее число ссылок на внешние ресурсы: " + str(self.take_away_url_counter) + "\n")
-            # fp.write("Уникальные внешние ресурсы:\n")
-            # for ref in self.take_away_url:
-            #     fp.write('\t' + ref + '\n')
-
             fp.write("Общее число ссылок на файлы pdf/doc/docx: " + str(len(self.files)) + "\n")
-            # fp.write("Ссылки на файлы pdf/doc/docx:\n")
-            # for ref in self.files:
-            #     fp.write('\t' + ref + '\n')
-
             fp.write("Количество не ответивших страниц: " + str(len(self.unanswered_url)) + "\n")
-
             fp.write("Количество страниц, которые не получилось спарсить: " + str(len(self.unparsed_url)) + "\n")
+        
+        with open("./stats/" + self.base_domain + "_processed_url.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Уникальные ссылки:\n")
+            for ref in self.processed_url:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_visited_url.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Посещенные уникальные страницы:\n")  
+            for ref in self.visited_url:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_subdomains.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Встреченные поддомены:\n")  
+            for ref in self.subdomains:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_bad_url.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Неработающие ссылки:\n")  
+            for ref in self.bad_url:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_inner_url.txt", 'w', encoding="utf-8") as fp:
+            for key, value in self.inner_url.items():
+                fp.write("Домен: " + key + "\n")
+                for ref in value:
+                    fp.write("\t" + ref + "\n")
+        
+        with open("./stats/" + self.base_domain + "_take_away_url.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Уникальные внешние ресурсы:\n")
+            for ref in self.take_away_url:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_files.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Ссылки на файлы pdf/doc/docx:\n")
+            for ref in self.files:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_mails.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Встреченные адреса почт:\n")
+            for ref in self.mails:
+                fp.write('\t' + ref + '\n')
+        
+        with open("./stats/" + self.base_domain + "_telephones.txt", 'w', encoding="utf-8") as fp:
+            fp.write("Встреченные номера телефонов:\n")
+            for ref in self.telephones:
+                fp.write('\t' + ref + '\n')
 
     def start_crawling(self, start_url: str, page_amount_to_visit: int) -> None:
         self.process_url(URL(start_url))
@@ -150,31 +172,16 @@ class WebCrawler:
                     href = link.get("href")
 
                     if href:
-                        if re.search(r"mailto:|tel:", href, re.I):
+                        if re.search(r"mailto:", href, re.I):
+                            self.mails.add(href)
+                            continue
+                        elif re.search(r"tel:", href, re.I):
+                            self.telephones.add(href)
                             continue
 
-                        if href.startswith("//"):
-                            href = "https:" + href
-                        
-                        # if re.search(r"([-\w]+[.])+\w+", url, re.I):
-                        #     domain = re.search(r"([-\w]+[.])+\w+", url, re.I).group()
-                        # else:
-                        #     domain = url.domain
-                        
-                        # if re.search(r"^https?://", href, re.I):
-                        #     protocol = re.search(r"^https?://", url, re.I).group()
-                        # else:
-                        #     protocol = url.protocol
-
-                        if href.startswith('/'):
-                            a = self.process_url(URL(None, url.domain, href, url.protocol))
-                        elif not re.search(r"^https?://", href, re.I):
-                            href = '/' + href
-                            a = self.process_url(URL(None, url.domain, href, url.protocol))
-                        elif re.search(r"[a-z]+[.][a-z]+", href, re.I):
-                            a = self.process_url(URL(href))
+                        self.process_url(URL(href, url))
             else:
                 self.bad_url.add(url.get_full_address())
             
-            if len(self.visited_url) % 100 == 0:
-                self.save_stats()
+            # if len(self.visited_url) % 100 == 0:
+            #     self.save_stats()
